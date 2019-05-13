@@ -1,42 +1,43 @@
 <template>
-  <div id="dwv">
-    <md-progress-bar md-mode="determinate" :md-value="loadProgress"></md-progress-bar>
-    <div class="button-row">
-      <!-- action buttons -->
-      <md-menu md-size="medium" md-align-trigger>
-        <md-button class="md-raised md-primary" md-menu-trigger :disabled="!dataLoaded">
-          {{ selectedTool }} <md-icon>arrow_drop_down</md-icon></md-button>
-
-        <md-menu-content>
-          <md-menu-item v-for="tool in tools" :key="tool" v-on:click="onChangeTool(tool)">{{ tool }}</md-menu-item>
-        </md-menu-content>
-
-        <md-button class="md-raised md-primary" v-on:click="onReset()" :disabled="!dataLoaded">Reset</md-button>
-        <md-button class="md-raised md-primary" v-on:click="showDicomTags = true" :disabled="!dataLoaded">Tags</md-button>
-      </md-menu>
-      <!-- dicom tags dialog-->
-      <md-dialog :md-active.sync="showDicomTags">
-        <tagsTable :tagsData="tags"/>
-      </md-dialog>
+<div class="row p-2">
+  <div class="col-sm-4" style="border-right : 2px solid #ccc">
+    <div id="title">
+      <h3>Liste des fichiers</h3>
     </div>
-    <div class="layerContainer">
-      <div class="dropBox md-body-1"><p>Drag and drop data here.</p></div>
-      <canvas class="imageLayer">Only for HTML5 compatible browsers...</canvas>
-      <div class="drawDiv"></div>
+    <div id="search" class="p-1">
+       <input type="text" class="form-control" placeholder="Recherche">
     </div>
-    <div class="legend md-caption"><p>Powered by <a href="https://github.com/ivmartel/dwv" title="dwv on github">dwv</a>
-      {{versions.dwv}} and Vue.js {{versions.vue}}</p></div>
+    <div class="d-flex p-1">
+      <button class="btn btn-outline-warning btn-sm col-1 mr-1" :disabled="!this.canReturn" @click="goUp"><font-awesome-icon icon="arrow-left" /></button>
+        <button class="btn btn-outline-success btn-sm col-1 mr-1"><font-awesome-icon icon="upload" /></button>
+         <button class="btn btn-outline-primary btn-sm col-1 mr-1" @click="this.getFiles"><font-awesome-icon icon="sync" /></button>
+    </div>
+    <div id="filesList" class="p-1">
+        <table class="table table-bordered">
+        <tr v-for="file in files" :key="file.id" @dblclick="fileDblClicked(file.id,file.file,file.parent,file.path)"><td>  <font-awesome-icon :icon=" file.file == 1 ? 'image':'folder'" /> {{ file.name }}</td></tr>
+
+    </table>
+    </div>
+  
   </div>
+  <div class="col-sm-8">
+     <h3>File Name</h3>
+    <div id="dwv">
+    <div class="layerContainer" style="width:100% !important;">
+        <canvas class="imageLayer" style="width:100%;height: 500px;"></canvas>
+    </div>
+</div>
+  </div>
+</div>
 </template>
 
 <script>
 // import
 import Vue from 'vue'
-import MdButton from 'vue-material'
 import dwv from 'dwv'
-import tagsTable from './tags-table'
+import axios from 'axios'
+// import tagsTable from './tags-table'
 
-Vue.use(MdButton)
 
 // gui overrides
 
@@ -59,7 +60,7 @@ dwv.image.decoderScripts = {
 export default {
   name: 'dwv',
   components: {
-    tagsTable
+    // tagsTable
   },
   data: function () {
     return {
@@ -73,8 +74,14 @@ export default {
       loadProgress: 0,
       dataLoaded: false,
       tags: null,
-      showDicomTags: false
+      showDicomTags: false,
+      currentRoot : 0,
+      prevRoot : -1,
+      files : [],
     }
+  },
+  created (){
+    this.getFiles();
   },
   mounted () {
     // create app
@@ -86,31 +93,46 @@ export default {
       'shapes': ['Ruler'],
       'isMobile': true
     })
-    // progress
-    var self = this
-    this.dwvApp.addEventListener('load-progress', function (event) {
-      self.loadProgress = event.loaded
-    })
-    this.dwvApp.addEventListener('load-end', function (/*event*/) {
-      // set data loaded flag
-      self.dataLoaded = true
-      // set dicom tags
-      self.tags = self.dwvApp.getTags()
-      // set the selected tool
-      if (self.dwvApp.isMonoSliceData() && self.dwvApp.getImage().getNumberOfFrames() === 1) {
-        self.selectedTool = 'ZoomAndPan'
-      } else {
-        self.selectedTool = 'Scroll'
+
+    // this.dwvApp.loadURLs(["http://192.168.1.3:8000/dwv/root/test.dcm"]);
+
+    // this.dwvApp.loadURLs(["https://raw.githubusercontent.com/ivmartel/dwv/master/tests/data/bbmri-53323851.dcm"]);
+   
+  },
+  computed : {
+    canReturn : function(){
+      if(this.prevRoot == -1){
+        return false;
       }
-    })
+      return true;
+    }
   },
   methods: {
-    onChangeTool: function (tool) {
-      this.selectedTool = tool
-      this.dwvApp.onChangeTool({ currentTarget: { value: tool } })
+    getFiles : function(){
+      axios.get('http://192.168.1.3:8000/api/files/' + this.currentRoot).then(response => {
+        this.files = response.data;
+      });
     },
-    onReset: function () {
-      this.dwvApp.onDisplayReset()
+    fileDblClicked : function(fileid,filetype,parentid,path){
+     
+      if(filetype == 0){
+        this.prevRoot = parentid;
+        this.currentRoot = fileid;
+        this.getFiles();
+      }else if(filetype == 1){
+        this.dwvApp.loadURLs([path]);
+      }
+     
+    },
+    goUp : function(){
+        this.currentRoot = this.prevRoot;
+        this.getCurrentParent();
+        this.getFiles();
+    },
+    getCurrentParent : function(){
+      axios.get('http://192.168.1.3:8000/api/current/parent/' + this.currentRoot).then(response =>{
+        this.prevRoot = response.data;
+      });
     }
   }
 }
@@ -118,38 +140,10 @@ export default {
 
 <!-- Add "scoped" attribute to limit CSS to this component only -->
 <style scoped>
-#dwv {
-  font-family: Arial, Helvetica, sans-serif;
-  height: 90%; }
-
-.button-row {
-  text-align: center;
-  padding: 5px;
+tr, td {
+  cursor: pointer;
 }
-
-#dwv button {
-  margin: 2px;
-}
-
-/* Layers */
-.layerContainer {
-    position: relative; padding: 0;
-    margin: auto; text-align: center; }
-.imageLayer {
-    position: absolute;
-    left: 0px; }
-.drawDiv {
-    position: absolute; pointer-events: none; }
-
-/* drag&drop */
-.dropBox {
-    border: 5px dashed rgba(68,138,255,0.38);
-    margin: auto;
-    text-align: center; vertical-align: middle; }
-.dropBox.hover { border: 5px dashed var(--md-theme-default-primary); }
-
-.md-dialog {
-  width: 80%;
-  height: 90%;
+tr:hover{
+  border : 2px solid #20619e;
 }
 </style>

@@ -16,8 +16,8 @@ export default {
 </script>
 
 <style>
-#app {
+/* #app {
   text-align: center;
   height: 100vh;
-}
+} */
 </style>
