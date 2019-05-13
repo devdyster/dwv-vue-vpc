@@ -14,17 +14,19 @@
     </div>
     <div id="filesList" class="p-1">
         <table class="table table-bordered">
-        <tr v-for="file in files" :key="file.id" @dblclick="fileDblClicked(file.id,file.file,file.parent,file.path)"><td>  <font-awesome-icon :icon=" file.file == 1 ? 'image':'folder'" /> {{ file.name }}</td></tr>
+        <tr v-for="file in files" :key="file.id" @click="fileDblClicked(file.id,file.file,file.parent,file.path,file.name)"><td>  <font-awesome-icon :icon=" file.file == 1 ? 'image':'folder'" /> {{ file.name }}</td></tr>
 
     </table>
     </div>
   
   </div>
-  <div class="col-sm-8">
-     <h3>File Name</h3>
+  <div class="col-sm-8 ">
+     <h3>{{ file_name }}</h3>
     <div id="dwv">
+    
+       <div class="spinner-border text-primary" style="display:block; margin : 0 auto;" v-show="dataLoaded"></div>
     <div class="layerContainer" style="width:100% !important;">
-        <canvas class="imageLayer" style="width:100%;height: 500px;"></canvas>
+        <canvas class="imageLayer" style="width:600px;height: 500px;"></canvas>
     </div>
 </div>
   </div>
@@ -35,16 +37,17 @@
 // import
 import Vue from 'vue'
 import dwv from 'dwv'
+import MdButton from 'vue-material'
 import axios from 'axios'
 // import tagsTable from './tags-table'
-
+Vue.use(MdButton)
 
 // gui overrides
 
 // decode query
 dwv.utils.decodeQuery = dwv.utils.base.decodeQuery
 // progress
-dwv.gui.displayProgress = function () {}
+dwv.gui.displayProgress = function (percent) {}
 // get element
 dwv.gui.getElement = dwv.gui.base.getElement
 // refresh element
@@ -78,12 +81,14 @@ export default {
       currentRoot : 0,
       prevRoot : -1,
       files : [],
+      file_name :''
     }
   },
   created (){
     this.getFiles();
   },
   mounted () {
+   
     // create app
     this.dwvApp = new dwv.App()
     // initialise app
@@ -94,10 +99,16 @@ export default {
       'isMobile': true
     })
 
-    // this.dwvApp.loadURLs(["http://192.168.1.3:8000/dwv/root/test.dcm"]);
-
+    // this.dwvApp.loadURLs(["dcm/test.dcm"]);
+// 
     // this.dwvApp.loadURLs(["https://raw.githubusercontent.com/ivmartel/dwv/master/tests/data/bbmri-53323851.dcm"]);
-   
+      
+    this.dwvApp.addEventListener('load-start',  () => {
+       this.dataLoaded = true;
+    })
+    this.dwvApp.addEventListener('load-end', () => {
+    this.dataLoaded = false;
+    })
   },
   computed : {
     canReturn : function(){
@@ -109,17 +120,18 @@ export default {
   },
   methods: {
     getFiles : function(){
-      axios.get('http://192.168.1.3:8000/api/files/' + this.currentRoot).then(response => {
+      axios.get('http://192.168.1.6:8000/api/files/' + this.currentRoot).then(response => {
         this.files = response.data;
       });
     },
-    fileDblClicked : function(fileid,filetype,parentid,path){
+    fileDblClicked : function(fileid,filetype,parentid,path,filename){
      
       if(filetype == 0){
         this.prevRoot = parentid;
         this.currentRoot = fileid;
         this.getFiles();
       }else if(filetype == 1){
+        this.file_name = filename;
         this.dwvApp.loadURLs([path]);
       }
      
@@ -130,7 +142,7 @@ export default {
         this.getFiles();
     },
     getCurrentParent : function(){
-      axios.get('http://192.168.1.3:8000/api/current/parent/' + this.currentRoot).then(response =>{
+      axios.get('http://192.168.1.6:8000/api/current/parent/' + this.currentRoot).then(response =>{
         this.prevRoot = response.data;
       });
     }
